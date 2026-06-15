@@ -4,11 +4,13 @@ import { BASE_URL } from "../../config";
 import { toast } from "react-toastify";
 import Hashloader from "react-spinners/HashLoader.js";
 import { AiOutlineDelete, AiOutlineFile, AiOutlineCloudUpload } from "react-icons/ai";
+import { useNavigate } from "react-router-dom";
 
-const Profile = ({ user }) => {
-  const isBloodTypeLocked = !!(user && user.bloodType);
-  const isGenderLocked = !!(user && user.gender);
-  const isDobLocked = !!(user && user.dob);
+const Profile = ({ user, isRegisterMode = false }) => {
+  const navigate = useNavigate();
+  const isBloodTypeLocked = !isRegisterMode && !!(user && user.bloodType);
+  const isGenderLocked = !isRegisterMode && !!(user && user.gender);
+  const isDobLocked = !isRegisterMode && !!(user && user.dob);
 
   const [selectedFile, setSelectedFile] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -174,6 +176,11 @@ const Profile = ({ user }) => {
       return;
     }
 
+    if (isRegisterMode && !formData.password) {
+      toast.error("Password is required for registration.");
+      return;
+    }
+
     if (formData.phone && formData.phone.length !== 9) {
       toast.error("Contact number must be exactly 9 digits.");
       return;
@@ -188,8 +195,11 @@ const Profile = ({ user }) => {
         phone: formData.phone ? `+94${formData.phone}` : "",
       };
 
-      const res = await fetch(`${BASE_URL}/users/${user._id}`, {
-        method: "put",
+      const url = isRegisterMode ? `${BASE_URL}/admin/patients` : `${BASE_URL}/users/${user._id}`;
+      const method = isRegisterMode ? "POST" : "PUT";
+
+      const res = await fetch(url, {
+        method: method,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -204,12 +214,16 @@ const Profile = ({ user }) => {
       }
 
       setLoading(false);
-      toast.success(message);
-      setTimeout(() => {
-        window.location.reload();
-      }, 1500);
+      toast.success(isRegisterMode ? "Patient Registered Successfully!" : message);
+      if (isRegisterMode) {
+        navigate("/admin/patients");
+      } else {
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      }
     } catch (error) {
-      toast.error(error.message || "An error occurred while updating profile");
+      toast.error(error.message || "An error occurred");
       setLoading(false);
     }
   };
@@ -230,6 +244,11 @@ const Profile = ({ user }) => {
 
   return (
     <div className="mt-8">
+      {isRegisterMode && (
+        <h2 className="text-headingColor font-bold text-[24px] leading-9 mb-6">
+          Register Patient
+        </h2>
+      )}
       <form onSubmit={submitHandler}>
 
         {/* Section 1: Personal Information */}
@@ -281,13 +300,14 @@ const Profile = ({ user }) => {
               </div>
             </div>
             <div>
-              <p className="form_label">Password (Leave blank to keep unchanged)</p>
+              <p className="form_label">{isRegisterMode ? "Password *" : "Password (Leave blank to keep unchanged)"}</p>
               <input
                 type="password"
                 placeholder="Password"
                 name="password"
                 value={formData.password}
                 onChange={handleInputChange}
+                required={isRegisterMode}
                 className="form_input"
               />
             </div>
@@ -535,7 +555,7 @@ const Profile = ({ user }) => {
             type="submit"
             className="w-full px-4 py-3 bg-primaryColor text-white text-[18px] leading-[30px] rounded-lg hover:bg-[#0052cc] transition-colors"
           >
-            {loading ? <Hashloader size={25} color="#ffffff" /> : "Update Profile"}
+            {loading ? <Hashloader size={25} color="#ffffff" /> : (isRegisterMode ? "Register Patient" : "Update Profile")}
           </button>
         </div>
 

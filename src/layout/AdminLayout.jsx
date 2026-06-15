@@ -6,10 +6,13 @@ const adminLinks = [
   { path: '/admin/overview', display: 'Overview' },
   { path: '/admin/doctors', display: 'Doctors' },
   { path: '/admin/patients', display: 'Patients' },
+  { path: '/admin/register-doctor', display: 'Register Doctor' },
+  { path: '/admin/register-patient', display: 'Register Patient' },
   { path: '/admin/services', display: 'Services' },
   { path: '/admin/appointments', display: 'Appointments' },
   { path: '/admin/reports', display: 'Reports' },
   { path: '/admin/payments', display: 'Payments' },
+  { path: '/admin/schedules', display: 'Schedules' },
 ];
 
 const AdminLayout = () => {

@@ -23,6 +23,9 @@ import ServicesManagement from '../pages/Admin/ServicesManagement';
 import AppointmentsManagement from '../pages/Admin/AppointmentsManagement';
 import PaymentsManagement from '../pages/Admin/PaymentsManagement';
 import Reports from '../pages/Admin/Reports';
+import DoctorRegistration from '../pages/Admin/DoctorRegistration';
+import PatientRegistration from '../pages/Admin/PatientRegistration';
+import SchedulesManagement from '../pages/Admin/SchedulesManagement';
 
 const Routers = () => {
   return (
@@ -45,10 +48,13 @@ const Routers = () => {
         <Route path="overview" element={<AdminDashboard />} />
         <Route path="doctors" element={<DoctorsManagement />} />
         <Route path="patients" element={<PatientsManagement />} />
+        <Route path="register-doctor" element={<DoctorRegistration />} />
+        <Route path="register-patient" element={<PatientRegistration />} />
         <Route path="services" element={<ServicesManagement />} />
         <Route path="appointments" element={<AppointmentsManagement />} />
         <Route path="payments" element={<PaymentsManagement />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="schedules" element={<SchedulesManagement />} />
       </Route>
     </Routes>
   )

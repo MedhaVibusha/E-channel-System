@@ -4,8 +4,10 @@ import uploadImageToCloudinary from "../../../utils/uploadImageToCloudinary";
 import { BASE_URL } from "./../../config";
 import { toast } from "react-toastify";
 import Hashloader from "react-spinners/HashLoader.js";
+import { useNavigate } from "react-router-dom";
 
-const Profile = ({ doctorData }) => {
+const Profile = ({ doctorData, isRegisterMode = false }) => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -72,11 +74,19 @@ const Profile = ({ doctorData }) => {
       return;
     }
 
+    if (isRegisterMode && !formData.password) {
+      toast.error("Password is required for registration.");
+      return;
+    }
+
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${BASE_URL}/doctors/${doctorData._id}`, {
-        method: "PUT",
+      const url = isRegisterMode ? `${BASE_URL}/admin/doctors` : `${BASE_URL}/doctors/${doctorData._id}`;
+      const method = isRegisterMode ? "POST" : "PUT";
+
+      const res = await fetch(url, {
+        method: method,
         headers: {
           "content-type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -90,13 +100,17 @@ const Profile = ({ doctorData }) => {
         throw Error(result.message);
       }
 
-      toast.success("Successfully Updated!");
+      toast.success(isRegisterMode ? "Doctor Registered Successfully!" : "Successfully Updated!");
       setLoading(false);
-      setTimeout(() => {
-        window.location.reload();
-      }, 800);
+      if (isRegisterMode) {
+        navigate("/admin/doctors");
+      } else {
+        setTimeout(() => {
+          window.location.reload();
+        }, 800);
+      }
     } catch (err) {
-      toast.error("An Error Occured");
+      toast.error(err.message || "An Error Occured");
       setLoading(false);
     }
   };
@@ -195,7 +209,7 @@ const Profile = ({ doctorData }) => {
   return (
     <div>
       <h2 className="text-headingColor font-bold text-[24px] leading-9 mb-10">
-        Profile Information
+        {isRegisterMode ? "Doctor Registration" : "Profile Information"}
       </h2>
 
       <form>
@@ -221,6 +235,20 @@ const Profile = ({ doctorData }) => {
             className="form_input"
           />
         </div>
+        {isRegisterMode && (
+          <div className="mb-5">
+            <p className="form_label">Password *</p>
+            <input
+              type="password"
+              name="password"
+              value={formData.password}
+              onChange={handleInputChange}
+              placeholder="Password"
+              className="form_input"
+              required
+            />
+          </div>
+        )}
         <div className="mb-5">
           <p className="form_label">Mobile Number *</p>
           <input
@@ -578,7 +606,7 @@ const Profile = ({ doctorData }) => {
             onClick={updateProfileHandler}
             className="bg-primaryColor text-white text-[18px] leading-[30px] w-full py-3 px-4 rounded-lg"
           >
-            {loading ? <Hashloader size={25} color="#ffffff" /> : "Update Profile"}
+            {loading ? <Hashloader size={25} color="#ffffff" /> : (isRegisterMode ? "Register Doctor" : "Update Profile")}
           </button>
         </div>
       </form>

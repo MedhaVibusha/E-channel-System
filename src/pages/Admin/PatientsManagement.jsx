@@ -18,6 +18,34 @@ const PatientsManagement = () => {
     const [showViewModal, setShowViewModal] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
 
+    // Detailed patient view state
+    const [detailedPatient, setDetailedPatient] = useState(null);
+    const [detailedAppointments, setDetailedAppointments] = useState([]);
+    const [loadingDetails, setLoadingDetails] = useState(false);
+
+    const handlePatientClick = async (patientId) => {
+        setLoadingDetails(true);
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(`${BASE_URL}/admin/patients/${patientId}`, {
+                headers: {
+                    Authorization: `Bearer ${token}`
+                }
+            });
+            const result = await res.json();
+            if (res.ok) {
+                setDetailedPatient(result.data.patient);
+                setDetailedAppointments(result.data.appointments || []);
+            } else {
+                toast.error(result.message || "Failed to load patient details");
+            }
+        } catch (err) {
+            toast.error("Error loading patient details");
+        } finally {
+            setLoadingDetails(false);
+        }
+    };
+
     // View Modal Tab state
     const [activeTab, setActiveTab] = useState('personal');
 
@@ -95,7 +123,8 @@ const PatientsManagement = () => {
     // Filter patients by search term
     const filteredPatients = patientList.filter(patient =>
         patient.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        patient.email?.toLowerCase().includes(searchTerm.toLowerCase())
+        patient.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        patient.patientId?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     // Toggle Account Status
@@ -277,6 +306,130 @@ const PatientsManagement = () => {
         }
     };
 
+    if (loadingDetails) {
+        return (
+            <div className="flex justify-center items-center h-60">
+                <HashLoader size={45} color="#0067FF" />
+            </div>
+        );
+    }
+
+    if (detailedPatient) {
+        return (
+            <section className="p-4 md:p-6 bg-slate-50 dark:bg-slate-900 min-h-screen">
+                <div className="bg-white dark:bg-slate-800 p-6 md:p-8 rounded-xl shadow-panelShadow border border-gray-100 dark:border-slate-700">
+                    <div className="flex flex-col sm:flex-row items-center justify-between mb-8 pb-4 border-b border-gray-100 dark:border-slate-700 gap-4">
+                        <div className="flex items-center gap-4">
+                            <img src={detailedPatient.photo || 'https://via.placeholder.com/100'} alt="" className="w-16 h-16 rounded-full object-cover border-2 border-primaryColor" />
+                            <div>
+                                <h2 className="text-2xl font-bold text-headingColor dark:text-white">{detailedPatient.name}</h2>
+                                <p className="text-sm text-textColor dark:text-gray-400">Patient ID: <span className="font-mono font-bold text-primaryColor">{detailedPatient.patientId || 'N/A'}</span></p>
+                            </div>
+                        </div>
+                        <button 
+                            onClick={() => setDetailedPatient(null)} 
+                            className="bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-headingColor dark:text-white px-5 py-2 rounded-lg font-semibold transition-colors w-full sm:w-auto"
+                        >
+                            &larr; Back to List
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                        {/* Personal Details */}
+                        <div className="bg-slate-50 dark:bg-slate-700/30 p-6 rounded-xl border border-gray-100 dark:border-slate-700">
+                            <h3 className="text-lg font-bold text-headingColor dark:text-white mb-4 border-b pb-2">Personal Details</h3>
+                            <div className="space-y-3">
+                                <p className="text-textColor dark:text-gray-300"><strong className="text-headingColor dark:text-white">Gender:</strong> <span className="capitalize">{detailedPatient.gender || 'N/A'}</span></p>
+                                <p className="text-textColor dark:text-gray-300"><strong className="text-headingColor dark:text-white">Date of Birth:</strong> {detailedPatient.dob ? new Date(detailedPatient.dob).toLocaleDateString() : 'N/A'}</p>
+                                <p className="text-textColor dark:text-gray-300"><strong className="text-headingColor dark:text-white">Age:</strong> {detailedPatient.age || (detailedPatient.dob ? calculateAge(detailedPatient.dob) : 'N/A')}</p>
+                                <p className="text-textColor dark:text-gray-300"><strong className="text-headingColor dark:text-white">Contact Number:</strong> {detailedPatient.phone || 'N/A'}</p>
+                                <p className="text-textColor dark:text-gray-300"><strong className="text-headingColor dark:text-white">Email:</strong> {detailedPatient.email}</p>
+                                <p className="text-textColor dark:text-gray-300"><strong className="text-headingColor dark:text-white">Address:</strong> {detailedPatient.address || 'N/A'}</p>
+                                <p className="text-textColor dark:text-gray-300"><strong className="text-headingColor dark:text-white">Registration Date:</strong> {new Date(detailedPatient.createdAt).toLocaleDateString()}</p>
+                            </div>
+                        </div>
+
+                        {/* Medical Details */}
+                        <div className="bg-slate-50 dark:bg-slate-700/30 p-6 rounded-xl border border-gray-100 dark:border-slate-700">
+                            <h3 className="text-lg font-bold text-headingColor dark:text-white mb-4 border-b pb-2">Medical History & Clinical Profile</h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase">Blood Group</h4>
+                                    <p className="font-bold text-primaryColor text-base">{detailedPatient.bloodType || 'N/A'}</p>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase">Allergies</h4>
+                                    <p className="font-semibold text-headingColor dark:text-gray-200">{detailedPatient.allergies || 'None recorded'}</p>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase">Chronic Diseases</h4>
+                                    <p className="font-semibold text-headingColor dark:text-gray-200">{detailedPatient.chronicDiseases || 'None recorded'}</p>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase">Previous Operations / Surgeries</h4>
+                                    <p className="font-semibold text-headingColor dark:text-gray-200">{detailedPatient.previousSurgeries || 'None recorded'}</p>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-400 uppercase">Current Medications</h4>
+                                    <p className="font-semibold text-headingColor dark:text-gray-200">{detailedPatient.currentMedications || 'None recorded'}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Appointment History */}
+                    <div>
+                        <h3 className="text-xl font-bold text-headingColor dark:text-white mb-4">Appointment History</h3>
+                        <div className="overflow-x-auto border border-gray-100 dark:border-slate-700 rounded-lg">
+                            <table className="w-full text-left">
+                                <thead className="bg-[#f4f7ff] dark:bg-slate-750 text-textColor dark:text-gray-300">
+                                    <tr>
+                                        <th className="px-4 py-3 font-semibold text-sm">Appointment ID</th>
+                                        <th className="px-4 py-3 font-semibold text-sm">Doctor</th>
+                                        <th className="px-4 py-3 font-semibold text-sm">Speciality</th>
+                                        <th className="px-4 py-3 font-semibold text-sm">Date & Time</th>
+                                        <th className="px-4 py-3 font-semibold text-sm">Status</th>
+                                        <th className="px-4 py-3 font-semibold text-sm">Payment</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {detailedAppointments.length > 0 ? (
+                                        detailedAppointments.map((appt) => (
+                                            <tr key={appt._id} className="border-b dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors text-sm">
+                                                <td className="px-4 py-3 font-mono font-bold text-xs text-primaryColor">{appt.appointmentId || 'N/A'}</td>
+                                                <td className="px-4 py-3 font-semibold text-headingColor dark:text-white">{appt.doctor?.name || 'Unknown'}</td>
+                                                <td className="px-4 py-3 text-textColor dark:text-gray-300 capitalize">{appt.doctor?.specialization?.replace('-', ' ') || 'N/A'}</td>
+                                                <td className="px-4 py-3 text-textColor dark:text-gray-300">
+                                                    {appt.appointmentTime ? `${appt.appointmentTime.day} | ${appt.appointmentTime.startingTime} - ${appt.appointmentTime.endingTime}` : 'N/A'}
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                                                        appt.status === 'Completed' || appt.status === 'Confirmed' || appt.status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'
+                                                    }`}>
+                                                        {appt.status}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3">
+                                                    <span className={`px-2 py-0.5 rounded text-xs font-bold ${appt.isPaid ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                                        {appt.isPaid ? 'Paid' : 'Unpaid'}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        ))
+                                    ) : (
+                                        <tr>
+                                            <td colSpan="6" className="text-center py-6 text-textColor dark:text-gray-400 italic">No appointments booked yet.</td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        );
+    }
+
     return (
         <section className="p-4 md:p-6 bg-slate-50 dark:bg-slate-900 min-h-screen">
             {/* Quick Statistics (Top of Page) */}
@@ -356,6 +509,7 @@ const PatientsManagement = () => {
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-slate-50 dark:bg-slate-700 text-textColor dark:text-gray-300 border-b border-gray-200 dark:border-slate-600">
                                 <tr>
+                                    <th className="px-6 py-4 font-bold text-sm tracking-wider uppercase">Patient ID</th>
                                     <th className="px-6 py-4 font-bold text-sm tracking-wider uppercase">Name</th>
                                     <th className="px-6 py-4 font-bold text-sm tracking-wider uppercase">Age</th>
                                     <th className="px-6 py-4 font-bold text-sm tracking-wider uppercase">Gender</th>
@@ -367,11 +521,15 @@ const PatientsManagement = () => {
                             <tbody>
                                 {filteredPatients.map((patient) => (
                                     <tr key={patient._id} className="border-b dark:border-slate-700 hover:bg-slate-50/50 dark:hover:bg-slate-750/30 transition-colors">
+                                        {/* Patient ID */}
+                                        <td className="px-6 py-4 font-mono font-bold text-xs text-primaryColor">
+                                            {patient.patientId || 'N/A'}
+                                        </td>
                                         {/* Name with Photo */}
                                         <td className="px-6 py-4 flex items-center gap-3">
                                             <img src={patient.photo || 'https://via.placeholder.com/40'} alt="" className="w-10 h-10 rounded-full object-cover border border-gray-200" />
                                             <div>
-                                                <span className="font-semibold text-headingColor dark:text-white block hover:text-primaryColor cursor-pointer" onClick={() => openViewModal(patient)}>{patient.name}</span>
+                                                <span className="font-semibold text-headingColor dark:text-white block hover:text-primaryColor cursor-pointer hover:underline" onClick={() => handlePatientClick(patient._id)}>{patient.name}</span>
                                                 <span className="text-xs text-textColor dark:text-gray-400 block">{patient.email}</span>
                                             </div>
                                         </td>
@@ -407,13 +565,6 @@ const PatientsManagement = () => {
                                         {/* Actions */}
                                         <td className="px-6 py-4">
                                             <div className="flex items-center justify-center gap-3">
-                                                <button
-                                                    onClick={() => openViewModal(patient)}
-                                                    className="bg-blue-50 hover:bg-blue-100 dark:bg-slate-700 dark:hover:bg-slate-600 text-primaryColor dark:text-blue-300 p-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 font-semibold text-xs py-1.5 px-3"
-                                                    title="View Details"
-                                                >
-                                                    <FaEye /> View
-                                                </button>
                                                 <button
                                                     onClick={() => openEditModal(patient)}
                                                     className="bg-orange-50 hover:bg-orange-100 dark:bg-slate-700 dark:hover:bg-slate-600 text-orange-600 dark:text-orange-300 p-2 rounded-lg transition-colors flex items-center justify-center gap-1.5 font-semibold text-xs py-1.5 px-3"

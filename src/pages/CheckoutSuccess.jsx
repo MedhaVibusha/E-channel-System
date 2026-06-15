@@ -195,7 +195,7 @@ export default function CheckoutSuccess() {
         ) : (
           <div className="p-8 text-center font-sans">
             <p className="text-gray-600 my-2">
-              Thanks for booking with SabraCare. We hope you have a great day!
+              Thanks for booking with Life HealthCare. We hope you have a great day!
             </p>
             <div className="py-8">
               <Link

@@ -141,6 +141,13 @@ const MyAccount = () => {
 
             <div className="md:col-span-2 md:px-[30px]">
               <div>
+                <h3 className="text-headingColor font-bold text-[20px] leading-7">Patient Dashboard</h3>
+                <p className="text-textColor text-sm mt-1">
+                  Review your profile summary, appointments, prescriptions, and visit records.
+                </p>
+              </div>
+
+              <div className="mt-5">
                 <button
                   onClick={() => setTab("bookings")}
                   className={` ${

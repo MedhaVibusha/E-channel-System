@@ -83,9 +83,9 @@ export const AuthContextProvider = ({ children }) => {
     // Check for inactivity
     const checkInactivity = () => {
       if (!state.lastActivity) return;
-      
+
       const timeSinceLastActivity = Date.now() - state.lastActivity;
-      
+
       if (timeSinceLastActivity > INACTIVITY_TIMEOUT) {
         // Auto logout due to inactivity
         dispatch({ type: "LOGOUT" });
@@ -97,13 +97,13 @@ export const AuthContextProvider = ({ children }) => {
     // Check token expiration
     const checkTokenExpiration = () => {
       if (!state.token) return;
-      
+
       try {
         const parts = state.token.split('.');
         if (parts.length !== 3) return;
         const tokenPayload = JSON.parse(atob(parts[1]));
         const currentTime = Date.now() / 1000;
-        
+
         if (tokenPayload.exp < currentTime) {
           // Token is expired, try to refresh
           handleTokenRefresh();
@@ -133,9 +133,9 @@ export const AuthContextProvider = ({ children }) => {
 
         if (response.ok) {
           const data = await response.json();
-          dispatch({ 
-            type: "UPDATE_TOKEN", 
-            payload: { token: data.accessToken } 
+          dispatch({
+            type: "UPDATE_TOKEN",
+            payload: { token: data.accessToken }
           });
         } else {
           // Refresh token is invalid, logout user

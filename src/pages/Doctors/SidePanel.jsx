@@ -3,7 +3,7 @@ import { BASE_URL } from "../../config.js";
 import { toast } from "react-toastify";
 import { useState } from "react";
 
-const SidePanel = ({ doctorId, ticketPrice, timeSlots, specialization }) => {
+const SidePanel = ({ doctorId, ticketPrice, timeSlots, specialization, scheduleStatus }) => {
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
   const user = localStorage.getItem("user");
   const role = localStorage.getItem("role");
@@ -53,33 +53,47 @@ const SidePanel = ({ doctorId, ticketPrice, timeSlots, specialization }) => {
         <p className="text_para mt-0 font-semibold text-headingColor">
           Available Time Slots
         </p>
-        <ul className="mt-3">
-          {timeSlots?.filter(item => item.enabled !== false).map(
-            (
-              item,
-              index
-            ) => (
-              <li
-                key={index}
-                onClick={() => setSelectedTimeSlot(item)}
-                className={`flex items-center justify-between mb-2 p-2 rounded cursor-pointer transition-colors duration-200 ${selectedTimeSlot === item ? "bg-primaryColor text-white shadow-md transform scale-105" : "bg-gray-50 hover:bg-gray-100"}`}
-              >
-                <p className={`text-[15px] leading-6 font-semibold ${selectedTimeSlot === item ? "text-white" : "text-textColor"}`}>
-                  {item.day.charAt(0).toUpperCase() + item.day.slice(1)}
-                </p>
-                <p className={`text-[15px] leading-6 font-semibold ${selectedTimeSlot === item ? "text-white" : "text-textColor"}`}>
-                  {convertTime(item.startingTime)} -{" "}
-                  {convertTime(item.endingTime)}
-                </p>
-              </li>
-            )
-          )}
-        </ul>
+        {scheduleStatus !== "Approved" ? (
+          <div className="bg-yellow-50 border border-solid border-yellow-200 rounded p-3 text-center mt-3">
+            <p className="text-yellow-700 font-semibold text-xs">
+              Doctor's schedule is currently pending approval and cannot be booked.
+            </p>
+          </div>
+        ) : (
+          <ul className="mt-3">
+            {timeSlots?.filter(item => item.enabled !== false).map(
+              (
+                item,
+                index
+              ) => (
+                <li
+                  key={index}
+                  onClick={() => setSelectedTimeSlot(item)}
+                  className={`flex items-center justify-between mb-2 p-2 rounded cursor-pointer transition-colors duration-200 ${selectedTimeSlot === item ? "bg-primaryColor text-white shadow-md transform scale-105" : "bg-gray-50 hover:bg-gray-100"}`}
+                >
+                  <p className={`text-[15px] leading-6 font-semibold ${selectedTimeSlot === item ? "text-white" : "text-textColor"}`}>
+                    {item.day.charAt(0).toUpperCase() + item.day.slice(1)}
+                  </p>
+                  <p className={`text-[15px] leading-6 font-semibold ${selectedTimeSlot === item ? "text-white" : "text-textColor"}`}>
+                    {convertTime(item.startingTime)} -{" "}
+                    {convertTime(item.endingTime)}
+                  </p>
+                </li>
+              )
+            )}
+          </ul>
+        )}
       </div>
       {role === "doctor" ? (
         <div className="bg-red-50 border border-solid border-red-200 rounded p-3.5 mt-4 text-center">
           <p className="text-red-600 font-semibold text-[14px]">
             Booking appointments is disabled for doctors.
+          </p>
+        </div>
+      ) : scheduleStatus !== "Approved" ? (
+        <div className="bg-gray-50 border border-solid border-gray-200 rounded p-3.5 mt-4 text-center">
+          <p className="text-gray-500 font-semibold text-xs">
+            Booking is temporarily unavailable.
           </p>
         </div>
       ) : (

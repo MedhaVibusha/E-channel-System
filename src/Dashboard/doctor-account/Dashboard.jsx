@@ -118,6 +118,7 @@ const Dashboard = () => {
                 )}
                 {tab === "patient-emr" && (
                   <PatientEMR
+                    appointments={data.appointments}
                     booking={activePatientBooking}
                     onConsultationCompleted={handleConsultationCompleted}
                   />

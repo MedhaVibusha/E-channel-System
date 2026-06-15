@@ -9,6 +9,92 @@ const Reports = () => {
     const { data: doctors, loading: doctorsLoading, error: doctorsError } = useFetchData(`${BASE_URL}/admin/doctors`);
     const { data: patients, loading: patientsLoading, error: patientsError } = useFetchData(`${BASE_URL}/admin/patients`);
 
+    const getPatientStats = (patientId) => {
+        const patientBookings = bookings ? bookings.filter(b => b.user && (b.user._id === patientId || b.user === patientId)) : [];
+        const completedBookings = patientBookings.filter(b => b.visitCompleted === 'Yes' || b.status === 'Completed');
+        
+        let lastVisitStr = 'N/A';
+        if (completedBookings.length > 0) {
+            const dates = completedBookings
+                .map(b => b.appointmentDate ? new Date(b.appointmentDate) : null)
+                .filter(d => d && !isNaN(d.getTime()));
+            if (dates.length > 0) {
+                const maxDate = new Date(Math.max(...dates));
+                lastVisitStr = maxDate.toLocaleDateString();
+            }
+        }
+        
+        return {
+            bookingsCount: patientBookings.length,
+            lastVisit: lastVisitStr
+        };
+    };
+
+    const getDoctorPerformanceStats = (bookingsList) => {
+        const totalBookingsAll = bookingsList.length;
+        
+        const performance = {};
+        if (doctors && Array.isArray(doctors)) {
+            doctors.forEach(doc => {
+                performance[doc._id.toString()] = {
+                    id: doc.doctorId || 'N/A',
+                    name: doc.name || 'Unknown',
+                    specialization: doc.specialization || 'N/A',
+                    ticketPrice: doc.ticketPrice || 0,
+                    bookingsCount: 0,
+                    completedCount: 0,
+                    pendingCount: 0,
+                    cancelledCount: 0,
+                    revenue: 0,
+                    workload: 0
+                };
+            });
+        }
+        
+        bookingsList.forEach(booking => {
+            if (!booking.doctor) return;
+            const docId = booking.doctor._id ? booking.doctor._id.toString() : booking.doctor.toString();
+            if (!performance[docId]) {
+                const docInfo = doctors && doctors.find(d => d._id.toString() === docId);
+                performance[docId] = {
+                    id: docInfo?.doctorId || 'N/A',
+                    name: docInfo?.name || booking.doctor.name || 'Unknown',
+                    specialization: docInfo?.specialization || 'N/A',
+                    ticketPrice: docInfo?.ticketPrice || booking.ticketPrice || 0,
+                    bookingsCount: 0,
+                    completedCount: 0,
+                    pendingCount: 0,
+                    cancelledCount: 0,
+                    revenue: 0,
+                    workload: 0
+                };
+            }
+            
+            performance[docId].bookingsCount += 1;
+            
+            if (booking.visitCompleted === 'Yes') {
+                performance[docId].completedCount += 1;
+                if (booking.isPaid) {
+                    performance[docId].revenue += Number(booking.ticketPrice || 0);
+                }
+            } else if (booking.status?.toLowerCase() === 'cancelled') {
+                performance[docId].cancelledCount += 1;
+            } else if (booking.status?.toLowerCase() === 'pending') {
+                performance[docId].pendingCount += 1;
+            }
+        });
+        
+        Object.keys(performance).forEach(docId => {
+            if (totalBookingsAll > 0) {
+                performance[docId].workload = ((performance[docId].bookingsCount / totalBookingsAll) * 100).toFixed(1);
+            } else {
+                performance[docId].workload = '0.0';
+            }
+        });
+        
+        return Object.values(performance);
+    };
+
     const loading = bookingsLoading || doctorsLoading || patientsLoading;
     const error = bookingsError || doctorsError || patientsError;
 
@@ -76,6 +162,9 @@ const Reports = () => {
 
     const getFilteredPatients = () => {
         if (!patients) return [];
+        // Patient Demographics displays all registered patients without date/month filters
+        if (reportType === 'demographics') return patients;
+        
         return patients.filter(patient => {
             const dateObj = extractCreationDate(patient);
             if (isNaN(dateObj.getTime())) return false;
@@ -201,34 +290,46 @@ const Reports = () => {
                 <tr>
                     <th>Patient ID</th>
                     <th>Patient Name & Email</th>
-                    <th>Age / Gender</th>
-                    <th>Blood Group</th>
-                    <th>Contact Phone</th>
+                    <th>Age / Gender / Blood</th>
+                    <th>Contact & Address</th>
+                    <th>Bookings / Last Visit</th>
                     <th>Allergies & Chronic Diseases</th>
                     <th>Medications & Surgeries</th>
                 </tr>
             `;
-            tableRows = reportData.map((patient) => `
-                <tr>
-                    <td><strong>${patient.patientId || 'N/A'}</strong></td>
-                    <td><strong>${patient.name || 'Unknown'}</strong><br/><span style="font-size: 10px; color: #64748b;">${patient.email || ''}</span></td>
-                    <td style="text-transform: capitalize;">${patient.age || 'N/A'} yrs / ${patient.gender || 'N/A'}</td>
-                    <td style="font-weight: bold; color: #2563eb;">${patient.bloodType || 'N/A'}</td>
-                    <td>${patient.phone || 'N/A'}</td>
-                    <td>
-                        <div style="margin-bottom: 4px;"><strong>Allergies:</strong> ${patient.allergies || 'None'}</div>
-                        <div><strong>Chronic Diseases:</strong> ${patient.chronicDiseases || 'None'}</div>
-                    </td>
-                    <td>
-                        <div style="margin-bottom: 4px;"><strong>Medications:</strong> ${patient.currentMedications || 'None'}</div>
-                        <div><strong>Surgeries:</strong> ${patient.previousSurgeries || 'None'}</div>
-                    </td>
-                </tr>
-            `).join('');
+            tableRows = reportData.map((patient) => {
+                const stats = getPatientStats(patient._id);
+                return `
+                    <tr>
+                        <td><strong>${patient.patientId || 'N/A'}</strong></td>
+                        <td><strong>${patient.name || 'Unknown'}</strong><br/><span style="font-size: 10px; color: #64748b;">${patient.email || ''}</span></td>
+                        <td style="text-transform: capitalize;">
+                            ${patient.age || 'N/A'} yrs / ${patient.gender || 'N/A'}<br/>
+                            <span style="font-weight: bold; color: #2563eb;">Blood: ${patient.bloodType || 'N/A'}</span>
+                        </td>
+                        <td>
+                            ${patient.phone || 'N/A'}<br/>
+                            <span style="font-size: 10px; color: #64748b;">${patient.address || 'N/A'}</span>
+                        </td>
+                        <td style="text-align: center;">
+                            <span style="font-weight: bold;">${stats.bookingsCount} Bookings</span><br/>
+                            <span style="font-size: 10px; color: #16a34a;">Last: ${stats.lastVisit}</span>
+                        </td>
+                        <td>
+                            <div style="margin-bottom: 4px;"><strong>Allergies:</strong> ${patient.allergies || 'None'}</div>
+                            <div><strong>Chronic Diseases:</strong> ${patient.chronicDiseases || 'None'}</div>
+                        </td>
+                        <td>
+                            <div style="margin-bottom: 4px;"><strong>Medications:</strong> ${patient.currentMedications || 'None'}</div>
+                            <div><strong>Surgeries:</strong> ${patient.previousSurgeries || 'None'}</div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
             
             tableFooter = `
                 <tr style="background-color: #f1f5f9; font-weight: bold;">
-                    <td colspan="6" style="text-align: right; padding: 12px;">Total Registered Patients in Period:</td>
+                    <td colspan="6" style="text-align: right; padding: 12px;">Total Registered Patients:</td>
                     <td style="padding: 12px;">${reportData.length}</td>
                 </tr>
             `;
@@ -236,68 +337,44 @@ const Reports = () => {
             reportName = "Doctor Performance & Workload Report";
             tableHeaders = `
                 <tr>
+                    <th>Doctor ID</th>
                     <th>Doctor Name</th>
                     <th>Specialization</th>
                     <th>Ticket Price</th>
-                    <th>Bookings Count</th>
+                    <th>Total Bookings</th>
+                    <th>Workload %</th>
                     <th>Completed Visits</th>
-                    <th>Est. Revenue</th>
+                    <th>Pending / Cancelled</th>
+                    <th>Actual Revenue</th>
                 </tr>
             `;
             
-            const doctorPerformance = {};
-            if (doctors && Array.isArray(doctors)) {
-                doctors.forEach(doc => {
-                    doctorPerformance[doc._id.toString()] = {
-                        name: doc.name || 'Unknown',
-                        specialization: doc.specialization || 'N/A',
-                        ticketPrice: doc.ticketPrice || 0,
-                        bookingsCount: 0,
-                        completedCount: 0,
-                        revenue: 0
-                    };
-                });
-            }
-            reportData.forEach(booking => {
-                if (!booking.doctor) return;
-                const docId = booking.doctor._id ? booking.doctor._id.toString() : booking.doctor.toString();
-                if (!doctorPerformance[docId]) {
-                    const docInfo = doctors && doctors.find(d => d._id.toString() === docId);
-                    doctorPerformance[docId] = {
-                        name: docInfo?.name || booking.doctor.name || 'Unknown',
-                        specialization: docInfo?.specialization || 'N/A',
-                        ticketPrice: docInfo?.ticketPrice || booking.ticketPrice || 0,
-                        bookingsCount: 0,
-                        completedCount: 0,
-                        revenue: 0
-                    };
-                }
-                doctorPerformance[docId].bookingsCount += 1;
-                if (booking.status === 'Completed') {
-                    doctorPerformance[docId].completedCount += 1;
-                    doctorPerformance[docId].revenue += Number(booking.ticketPrice || 0);
-                }
-            });
-            const perfList = Object.values(doctorPerformance);
+            const perfList = getDoctorPerformanceStats(reportData);
             
             tableRows = perfList.map(doc => `
                 <tr>
+                    <td><strong>${doc.id}</strong></td>
                     <td><strong>${doc.name}</strong></td>
                     <td style="text-transform: capitalize;">${doc.specialization}</td>
                     <td>${doc.ticketPrice} LKR</td>
                     <td>${doc.bookingsCount}</td>
-                    <td>${doc.completedCount}</td>
-                    <td>${doc.revenue} LKR</td>
+                    <td>${doc.workload}%</td>
+                    <td><span style="color: #16a34a; font-weight: bold;">${doc.completedCount}</span></td>
+                    <td>${doc.pendingCount} / ${doc.cancelledCount}</td>
+                    <td><strong>${doc.revenue} LKR</strong></td>
                 </tr>
             `).join('');
             
             const totalBookings = perfList.reduce((sum, d) => sum + d.bookingsCount, 0);
+            const totalCompleted = perfList.reduce((sum, d) => sum + d.completedCount, 0);
             const totalRevenue = perfList.reduce((sum, d) => sum + d.revenue, 0);
             tableFooter = `
                 <tr style="background-color: #f1f5f9; font-weight: bold;">
-                    <td colspan="3" style="text-align: right; padding: 12px;">Total:</td>
-                    <td style="padding: 12px;">${totalBookings} Bookings</td>
-                    <td style="padding: 12px;">${perfList.reduce((sum, d) => sum + d.completedCount, 0)} Completed</td>
+                    <td colspan="4" style="text-align: right; padding: 12px;">Total Across All Doctors:</td>
+                    <td style="padding: 12px;">${totalBookings}</td>
+                    <td style="padding: 12px;">100%</td>
+                    <td style="padding: 12px; color: #16a34a;">${totalCompleted}</td>
+                    <td style="padding: 12px;">${perfList.reduce((sum, d) => sum + d.pendingCount, 0)} / ${perfList.reduce((sum, d) => sum + d.cancelledCount, 0)}</td>
                     <td style="padding: 12px;">${totalRevenue} LKR</td>
                 </tr>
             `;
@@ -591,17 +668,19 @@ const Reports = () => {
                         <option value="sessions">Session & Slot Utilisation</option>
                     </select>
 
-                    <select 
-                        value={timeFilter} 
-                        onChange={(e) => setTimeFilter(e.target.value)}
-                        className="py-2 px-3.5 bg-primaryColor/10 border border-solid border-primaryColor/20 text-headingColor font-semibold rounded-xl focus:outline-none text-sm"
-                    >
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="monthly">Monthly</option>
-                    </select>
+                    {reportType !== 'demographics' && (
+                        <select 
+                            value={timeFilter} 
+                            onChange={(e) => setTimeFilter(e.target.value)}
+                            className="py-2 px-3.5 bg-primaryColor/10 border border-solid border-primaryColor/20 text-headingColor font-semibold rounded-xl focus:outline-none text-sm"
+                        >
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    )}
 
-                    {timeFilter === 'monthly' && (
+                    {reportType !== 'demographics' && timeFilter === 'monthly' && (
                         <>
                             <select
                                 value={selectedMonth}
@@ -624,7 +703,7 @@ const Reports = () => {
                         </>
                     )}
 
-                    {(timeFilter === 'daily' || timeFilter === 'weekly') && (
+                    {reportType !== 'demographics' && (timeFilter === 'daily' || timeFilter === 'weekly') && (
                         <input
                             type="date"
                             value={selectedDate}
@@ -664,9 +743,13 @@ const Reports = () => {
                             {reportType === 'sessions' && 'Session Scheduling & Slot Utilisation Report'}
                             
                             <span className="block text-xs text-textColor font-semibold mt-1 tracking-normal capitalize">
-                                {timeFilter === 'daily' && `Daily Report: ${selectedDate}`}
-                                {timeFilter === 'weekly' && `Weekly Report: Week of ${new Date(selectedDate).toLocaleDateString()}`}
-                                {timeFilter === 'monthly' && `Monthly Report: ${monthNames[selectedMonth]} ${selectedYear}`}
+                                {reportType === 'demographics' ? 'All Registered Patients' : (
+                                    <>
+                                        {timeFilter === 'daily' && `Daily Report: ${selectedDate}`}
+                                        {timeFilter === 'weekly' && `Weekly Report: Week of ${new Date(selectedDate).toLocaleDateString()}`}
+                                        {timeFilter === 'monthly' && `Monthly Report: ${monthNames[selectedMonth]} ${selectedYear}`}
+                                    </>
+                                )}
                             </span>
                         </h2>
                     </div>
@@ -699,19 +782,23 @@ const Reports = () => {
                                         <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Patient Name</th>
                                         <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Age / Gender</th>
                                         <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Blood Group</th>
-                                        <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Contact Phone</th>
-                                        <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Allergies & Chronic Diseases</th>
+                                        <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Contact & Address</th>
+                                        <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700 text-center">Bookings / Last Visit</th>
+                                        <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Allergies & Chronic</th>
                                         <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Medications & Surgeries</th>
                                     </tr>
                                 )}
                                 {reportType === 'performance' && (
                                     <tr>
+                                        <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Doctor ID</th>
                                         <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Doctor Name</th>
                                         <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Specialization</th>
                                         <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Ticket Price</th>
-                                        <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Bookings Count</th>
+                                        <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Total Bookings</th>
+                                        <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Workload %</th>
                                         <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Completed Visits</th>
-                                        <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Est. Revenue</th>
+                                        <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Pending / Cancelled</th>
+                                        <th className="px-4 py-3 border border-solid border-gray-200 font-bold text-gray-700">Actual Revenue</th>
                                     </tr>
                                 )}
                                 {reportType === 'sessions' && (
@@ -790,76 +877,53 @@ const Reports = () => {
 
                                 {reportType === 'demographics' && (
                                     activePatients.length > 0 ? (
-                                        activePatients.map((patient) => (
-                                            <tr key={patient._id} className="hover:bg-gray-50 transition-colors text-xs">
-                                                <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-bold text-primaryColor">
-                                                    {patient.patientId || 'N/A'}
-                                                </td>
-                                                <td className="px-4 py-3 border border-solid border-gray-200">
-                                                    <div className="font-bold text-headingColor">{patient.name || 'Unknown'}</div>
-                                                    <div className="text-[10px] text-textColor font-mono">{patient.email}</div>
-                                                </td>
-                                                <td className="px-4 py-3 border border-solid border-gray-200 capitalize font-medium">{patient.age || 'N/A'} yrs / {patient.gender || 'N/A'}</td>
-                                                <td className="px-4 py-3 border border-solid border-gray-200 font-bold text-primaryColor">{patient.bloodType || 'N/A'}</td>
-                                                <td className="px-4 py-3 border border-solid border-gray-200 font-mono">{patient.phone || 'N/A'}</td>
-                                                <td className="px-4 py-3 border border-solid border-gray-200 text-[11px]">
-                                                    <div className="mb-1"><strong>Allergies:</strong> {patient.allergies || 'None'}</div>
-                                                    <div><strong>Chronic:</strong> {patient.chronicDiseases || 'None'}</div>
-                                                </td>
-                                                <td className="px-4 py-3 border border-solid border-gray-200 text-[11px]">
-                                                    <div className="mb-1"><strong>Medications:</strong> {patient.currentMedications || 'None'}</div>
-                                                    <div><strong>Surgeries:</strong> {patient.previousSurgeries || 'None'}</div>
-                                                </td>
-                                            </tr>
-                                        ))
+                                        activePatients.map((patient) => {
+                                            const stats = getPatientStats(patient._id);
+                                            return (
+                                                <tr key={patient._id} className="hover:bg-gray-50 transition-colors text-xs">
+                                                    <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-bold text-primaryColor">
+                                                        {patient.patientId || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-3 border border-solid border-gray-200">
+                                                        <div className="font-bold text-headingColor">{patient.name}</div>
+                                                        <div className="text-[10px] text-textColor font-mono">{patient.email}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 border border-solid border-gray-200 capitalize font-medium">{patient.age || 'N/A'} yrs / {patient.gender || 'N/A'}</td>
+                                                    <td className="px-4 py-3 border border-solid border-gray-200 font-bold text-primaryColor">{patient.bloodType || 'N/A'}</td>
+                                                    <td className="px-4 py-3 border border-solid border-gray-200">
+                                                        <div className="font-mono">{patient.phone || 'N/A'}</div>
+                                                        <div className="text-[10px] text-textColor italic">{patient.address || 'N/A'}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 border border-solid border-gray-200 text-center">
+                                                        <div className="font-bold text-headingColor">{stats.bookingsCount} Bookings</div>
+                                                        <div className="text-[10px] text-green-600 font-medium">Last: {stats.lastVisit}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 border border-solid border-gray-200 text-[11px]">
+                                                        <div className="mb-1"><strong>Allergies:</strong> {patient.allergies || 'None'}</div>
+                                                        <div><strong>Chronic:</strong> {patient.chronicDiseases || 'None'}</div>
+                                                    </td>
+                                                    <td className="px-4 py-3 border border-solid border-gray-200 text-[11px]">
+                                                        <div className="mb-1"><strong>Medications:</strong> {patient.currentMedications || 'None'}</div>
+                                                        <div><strong>Surgeries:</strong> {patient.previousSurgeries || 'None'}</div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })
                                     ) : (
                                         <tr>
-                                            <td colSpan="7" className="text-center py-10 text-textColor italic">
-                                                No records found for the selected timeframe.
+                                            <td colSpan="8" className="text-center py-10 text-textColor italic">
+                                                No records found.
                                             </td>
                                         </tr>
                                     )
                                 )}
 
                                 {reportType === 'performance' && (() => {
-                                    const doctorPerformance = {};
-                                    if (doctors && Array.isArray(doctors)) {
-                                        doctors.forEach(doc => {
-                                            doctorPerformance[doc._id.toString()] = {
-                                                name: doc.name || 'Unknown',
-                                                specialization: doc.specialization || 'N/A',
-                                                ticketPrice: doc.ticketPrice || 0,
-                                                bookingsCount: 0,
-                                                completedCount: 0,
-                                                revenue: 0
-                                            };
-                                        });
-                                    }
-                                    activeBookings.forEach(booking => {
-                                        if (!booking.doctor) return;
-                                        const docId = booking.doctor._id ? booking.doctor._id.toString() : booking.doctor.toString();
-                                        if (!doctorPerformance[docId]) {
-                                            const docInfo = doctors && doctors.find(d => d._id.toString() === docId);
-                                            doctorPerformance[docId] = {
-                                                name: docInfo?.name || booking.doctor.name || 'Unknown',
-                                                specialization: docInfo?.specialization || 'N/A',
-                                                ticketPrice: docInfo?.ticketPrice || booking.ticketPrice || 0,
-                                                bookingsCount: 0,
-                                                completedCount: 0,
-                                                revenue: 0
-                                            };
-                                        }
-                                        doctorPerformance[docId].bookingsCount += 1;
-                                        if (booking.status === 'Completed') {
-                                            doctorPerformance[docId].completedCount += 1;
-                                            doctorPerformance[docId].revenue += Number(booking.ticketPrice || 0);
-                                        }
-                                    });
-                                    const perfList = Object.values(doctorPerformance);
+                                    const perfList = getDoctorPerformanceStats(activeBookings);
                                     if (perfList.length === 0) {
                                         return (
                                             <tr>
-                                                <td colSpan="6" className="text-center py-10 text-textColor italic">
+                                                <td colSpan="9" className="text-center py-10 text-textColor italic">
                                                     No doctors found.
                                                 </td>
                                             </tr>
@@ -867,11 +931,14 @@ const Reports = () => {
                                     }
                                     return perfList.map(doc => (
                                         <tr key={doc.name} className="hover:bg-gray-50 transition-colors text-xs">
+                                            <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-bold text-primaryColor">{doc.id}</td>
                                             <td className="px-4 py-3 border border-solid border-gray-200 font-bold text-headingColor">{doc.name}</td>
                                             <td className="px-4 py-3 border border-solid border-gray-200 capitalize">{doc.specialization}</td>
                                             <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-semibold">{doc.ticketPrice} LKR</td>
                                             <td className="px-4 py-3 border border-solid border-gray-200 font-bold">{doc.bookingsCount}</td>
+                                            <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-bold">{doc.workload}%</td>
                                             <td className="px-4 py-3 border border-solid border-gray-200 font-bold text-green-700">{doc.completedCount}</td>
+                                            <td className="px-4 py-3 border border-solid border-gray-200 font-mono">{doc.pendingCount} / {doc.cancelledCount}</td>
                                             <td className="px-4 py-3 border border-solid border-gray-200 font-bold font-mono text-primaryColor">{doc.revenue} LKR</td>
                                         </tr>
                                     ));
@@ -992,7 +1059,7 @@ const Reports = () => {
                             {reportType === 'demographics' && activePatients.length > 0 && (
                                 <tfoot>
                                     <tr className="bg-gray-50 font-bold text-gray-800">
-                                        <td colSpan="6" className="px-4 py-3 border border-solid border-gray-200 text-right text-xs">Total Patients Listed:</td>
+                                        <td colSpan="7" className="px-4 py-3 border border-solid border-gray-200 text-right text-xs">Total Patients Listed:</td>
                                         <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-black text-sm text-primaryColor">
                                             {activePatients.length}
                                         </td>
@@ -1000,22 +1067,36 @@ const Reports = () => {
                                 </tfoot>
                             )}
 
-                            {reportType === 'performance' && activeBookings.length > 0 && (
-                                <tfoot>
-                                    <tr className="bg-gray-50 font-bold text-gray-800">
-                                        <td colSpan="3" className="px-4 py-3 border border-solid border-gray-200 text-right text-xs">Total Across All Doctors:</td>
-                                        <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-black text-xs">
-                                            {activeBookings.length} Bookings
-                                        </td>
-                                        <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-black text-xs text-green-700">
-                                            {activeBookings.filter(b => b.status === 'Completed').length} Completed
-                                        </td>
-                                        <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-black text-sm text-primaryColor">
-                                            {activeBookings.reduce((sum, booking) => sum + (booking.status === 'Completed' ? Number(booking.ticketPrice || 0) : 0), 0)} LKR
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            )}
+                            {reportType === 'performance' && activeBookings.length > 0 && (() => {
+                                const perfList = getDoctorPerformanceStats(activeBookings);
+                                const totalBookings = perfList.reduce((sum, d) => sum + d.bookingsCount, 0);
+                                const totalCompleted = perfList.reduce((sum, d) => sum + d.completedCount, 0);
+                                const totalRevenue = perfList.reduce((sum, d) => sum + d.revenue, 0);
+                                const totalPending = perfList.reduce((sum, d) => sum + d.pendingCount, 0);
+                                const totalCancelled = perfList.reduce((sum, d) => sum + d.cancelledCount, 0);
+                                return (
+                                    <tfoot>
+                                        <tr className="bg-gray-50 font-bold text-gray-800">
+                                            <td colSpan="4" className="px-4 py-3 border border-solid border-gray-200 text-right text-xs">Total Across All Doctors:</td>
+                                            <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-black text-xs">
+                                                {totalBookings} Bookings
+                                            </td>
+                                            <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-black text-xs">
+                                                100%
+                                            </td>
+                                            <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-black text-xs text-green-700">
+                                                {totalCompleted} Completed
+                                            </td>
+                                            <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-black text-xs">
+                                                {totalPending} / {totalCancelled}
+                                            </td>
+                                            <td className="px-4 py-3 border border-solid border-gray-200 font-mono font-black text-sm text-primaryColor">
+                                                {totalRevenue} LKR
+                                            </td>
+                                        </tr>
+                                    </tfoot>
+                                );
+                            })()}
                         </table>
                     </div>
 

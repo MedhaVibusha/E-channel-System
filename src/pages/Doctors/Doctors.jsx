@@ -61,7 +61,7 @@ const Doctors = () => {
     const currentTimeStr = `${hours}:${minutes}`;
 
     return list.filter((doctor) => {
-      if (!doctor.timeSlots || doctor.timeSlots.length === 0) return false;
+      if (!doctor.timeSlots || doctor.timeSlots.length === 0 || doctor.scheduleStatus !== "Approved") return false;
 
       return doctor.timeSlots.some((slot) => {
         const isToday = slot.day?.toLowerCase().trim() === currentDayName;

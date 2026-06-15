@@ -30,6 +30,7 @@ const DoctorDetails = () => {
     specialization,
     ticketPrice,
     photo,
+    scheduleStatus,
   } = doctor;
 
   // Calculate the average rating
@@ -122,6 +123,7 @@ const DoctorDetails = () => {
               ticketPrice={ticketPrice}
               timeSlots={timeSlots}
               specialization={specialization}
+              scheduleStatus={scheduleStatus}
             />
           </div>
         </div>

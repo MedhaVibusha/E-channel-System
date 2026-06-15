@@ -44,7 +44,7 @@ const Tabs = ({ tab, setTab }) => {
               : "bg-transparent text-headingColor"
             } w-full btn mt-0 rounded-md`}
         >
-          Patient EMR
+          Clinical History
         </button>
         <button
           onClick={() => setTab("schedule-management")}
